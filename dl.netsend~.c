@@ -2,10 +2,7 @@
 *                                                                              
 * Sends uncompressed audio data over IP, from dl.netsend~ to dl.netreceive~.   
 *                                                                              
-* Copyright (C) 2020 David Landon                                              
-*                                                                              
-* Based on netsend~ copyright (C) 2004-2005 Olaf Matthes, itself based on      
-* streamout~ copyright (C) 1999 Guenter Geiger.                                
+* Copyright (C) 2020 David Landon                                                                              
 *                                                                              
 * dl.netsend~ utilizes Libuv and Pthread libraries, so those will be needed    
 * if you intent to modify.                                                     
@@ -40,7 +37,7 @@
 #define DEFAULT_AUDIO_BUFFER_SIZE 1024	/* number of samples in one audio block */
 #define DEFAULT_UDP_PACKT_SIZE 8192		/* number of bytes we send in one UDP datagram (OS X only) */
 #define DEFAULT_IP_ADDRESS  "0.0.0.0"   /* default network port number */
-#define DEFAULT_PORT "8000"               /* default network port number */
+#define DEFAULT_PORT "8000"             /* default network port number */
 #define BUFMAX 4096
 
 #define UV_ERROR(msg, code) do {                                           \
