@@ -1,3 +1,31 @@
+/* ------------------------ dl.netsend~ ----------------------------------------/
+*                                                                              
+* Sends uncompressed audio data over IP, from dl.netsend~ to dl.netreceive~.   
+*                                                                              
+* Copyright (C) 2020 David Landon                                              
+*                                                                              
+* Based on netsend~ copyright (C) 2004-2005 Olaf Matthes, itself based on      
+* streamout~ copyright (C) 1999 Guenter Geiger.                                
+*                                                                              
+* dl.netsend~ utilizes Libuv and Pthread libraries, so those will be needed    
+* if you intent to modify.                                                     
+*                                                                              
+* dl.netsend~ is free software: you can redistribute it and/or modify          
+* it under the terms of the GNU General Public License as published by         
+* the Free Software Foundation, either version 3 of the License, or            
+* (at your option) any later version.                                          
+*                                                                              
+* dl.netsend~ is distributed in the hope that it will be useful,               
+* but WITHOUT ANY WARRANTY; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY 
+* OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES 
+* OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  
+* See the GNU General Public License for more details.                                 
+*                                                                              
+* <http://www.gnu.org/licenses/>
+*
+* ---------------------------------------------------------------------------- */
+
+
 #include "uv.h" 
 
 #include "ext.h"			// standard Max include, always required (except in Jitter)
