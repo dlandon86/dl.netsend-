@@ -54,38 +54,22 @@ typedef struct _dlnetsend {
     t_symbol           *d_ipaddr;
     t_symbol           *d_portno;
     t_double            d_vec;
-    uv_udp_t            send_socket;
+    uv_udp_t            send_handle;
     uv_udp_send_t       send_req;
     uv_buf_t            buffer;
-    struct sockaddr_in6  send_addr;
+    struct sockaddr_in  send_addr;
     uv_loop_t          *loop;
 
     pthread_t           thread;
 
     long                vs;
 
-    //uv_loop_t           event_loop_struct;
-    //uv_loop_t*          event_loop_ptr;
+    uv_loop_t           event_loop_struct;
+    uv_loop_t*          event_loop_ptr;
 
 
 } t_dlnetsend;
 
-
-
-uv_loop_t           event_loop_struct;
-uv_loop_t*          event_loop_ptr;
-
-
-uv_loop_t* uv_event_loop() {
-    if (event_loop_ptr != NULL)
-        return event_loop_ptr;
-
-    if (uv_loop_init(&event_loop_struct))
-        return NULL;
-
-    event_loop_ptr = &event_loop_struct;
-    return event_loop_ptr;
-}
 
 
 static t_symbol* ps_nothing, * ps_localhost;
@@ -108,7 +92,9 @@ void send_cb(uv_udp_send_t* req, int status);
 void test_msg(t_dlnetsend *x);
 
 void sock_connect(t_dlnetsend* x);
-void thread_main();
+void thread_main(void* arg);
+uv_loop_t* uv_event_loop(t_dlnetsend* x);
+
 
 
 
@@ -206,6 +192,10 @@ void *dlnetsend_new(t_symbol *s, long argc, t_atom *argv)
             x->d_portno = gensym(DEFAULT_PORT);
             post("dl.netsend~: Port number argument missing. set to %s", x->d_portno->s_name);
         }
+
+        x->buffer.base = (char*)malloc(sizeof(double) * sys_getblksize());
+        x->buffer.len = sys_getblksize() * sizeof(double);
+
 	}
 	return (x);
 }
@@ -240,9 +230,9 @@ void dlnetsend_dsp64(t_dlnetsend *x, t_object *dsp64, short *count, double sampl
 {
 	post("my sample rate is: %f", samplerate);
 
-    x->vs = maxvectorsize;
-    x->buffer.base = (char*)malloc(sizeof(double) * maxvectorsize);
-    x->buffer.len = maxvectorsize;
+    //x->vs = maxvectorsize;
+    //x->buffer.base = (char*)malloc(sizeof(double) * maxvectorsize);
+    //x->buffer.len = maxvectorsize * sizeof(double);
 
 object_method(dsp64, gensym("dsp_add64"), x, dlnetsend_perform64, 0, NULL);
 }
@@ -252,19 +242,27 @@ object_method(dsp64, gensym("dsp_add64"), x, dlnetsend_perform64, 0, NULL);
 void dlnetsend_perform64(t_dlnetsend *x, t_object *dsp64, double **ins, long numins, double **outs, long numouts, long sampleframes, long flags, void *userparam)
 {
 	t_double *inL = ins[0];		// we get audio for each inlet of the object from the **ins argument
+    t_double *inL2 = malloc(sampleframes * sizeof(double));
 	t_double *inR = ins[1];		// we get audio for each inlet of the object from the **ins argument
 	t_double *outL = outs[0];	// we get audio for each outlet of the object from the **outs argument
 	int n = sampleframes;
 
-    memcpy(x->buffer.base, ins[0], sizeof(double) * x->vs);
-    int r = uv_udp_send(&x->send_req, &x->send_socket, &x->buffer, 1, (const struct sockaddr*) & x->send_addr, send_cb);
-    //int r = uv_udp_try_send(&x->send_socket, &x->buffer, 1, (const struct sockaddr*) & x->send_addr, send_cb);
-    if (r) UV_ERROR("udp_send", r);
+    memcpy(x->buffer.base, inL, sampleframes * sizeof(double));
+    memcpy(inL2, x->buffer.base, sampleframes * sizeof(double));
+
+
+    //int r = uv_udp_send(&x->send_req, &x->send_handle, &x->buffer, 1, (const struct sockaddr*) & x->send_addr, send_cb);
+    //int r = uv_udp_try_send(&x->send_handle, &x->buffer, 1, (const struct sockaddr*) & x->send_addr, send_cb);
+    //if (r) UV_ERROR("udp_send", r);
 
 
     // this perform method simply copies the input to the output, offsetting the value
-	while (n--)
-		*outL++ = *inL++ + x->d_offset;
+	//while (n--)
+	//	*outL++ = *inL2++ + x->d_offset;
+	//	*outL++ = *inL++ + x->d_offset;
+
+    while (n--)
+        *outL++ = *inL2++;
 }
 
 
@@ -283,36 +281,54 @@ void send_cb(uv_udp_send_t* req, int status) {
 }
 
 void test_msg(t_dlnetsend *x) {
+    uv_buf_t buf;
+    buf = uv_buf_init("PING, the freak on!", 19);
 
-    x->buffer = uv_buf_init("PING, the freak on!", 19);
+    //struct sockaddr_in send_addr;
+    int r;
+    //r = uv_ip4_addr("127.0.0.1", 9200, &send_addr);
+    //if (r) UV_ERROR("ip4_addr", r);
 
-    int r = uv_udp_send(&x->send_req, &x->send_socket, &x->buffer, 1, (const struct sockaddr*) &x->send_addr, send_cb);
+    uv_udp_set_broadcast(&x->send_handle, 1);
+    r = uv_udp_send(&x->send_req, &x->send_handle, &buf, 1, (const struct sockaddr*) &x->send_addr, send_cb);
     if (r) UV_ERROR("udp_send", r);
 
 }
 
 void sock_connect(t_dlnetsend* x) {
 
-    //event_loop_ptr = (uv_loop_t*)malloc(sizeof(uv_loop_t));  // Shouldn't I be using this pointer? Doesn't work when I do...
-    //event_loop_ptr = uv_event_loop();
+    x->loop = uv_event_loop(x);
 
-    x->loop = (uv_loop_t*)malloc(sizeof(uv_loop_t));  // Move to the initilization routine...???
-    x->loop = uv_event_loop();
+    //x->send_addr.sin6_family = AF_INET6;
+    
+    int r = uv_ip4_addr("127.0.0.1", 9123, &x->send_addr);
+    if (r) UV_ERROR("ip6_addr", r);
 
-    int r = uv_ip6_addr("0:0:0:0:0:0:0:1", 9123, &x->send_addr);
-    if (r) UV_ERROR("ip6_addr", r)
+    uv_udp_init(x->loop, &x->send_handle);
 
-    uv_udp_init(x->loop, &x->send_socket);
-    uv_udp_bind(&x->send_socket, (const struct sockaddr*) &x->send_addr, 1);
+    //uv_udp_bind(&x->send_handle, (const struct sockaddr*) &x->send_addr, 0);
 
-    //test_msg(x);
+    test_msg(x);
 
-    pthread_create(&x->thread, NULL, thread_main, NULL);
+    pthread_create(&x->thread, NULL, thread_main, x);
 }
 
-void thread_main() 
+void thread_main(void *arg) 
 {
+    t_dlnetsend* x = arg;
+
     post("dlnetsend: Opening loop");
-    uv_run(uv_event_loop(), UV_RUN_DEFAULT);
+    uv_run(x->loop, UV_RUN_DEFAULT);
     post("dlnetsend: loop closing");
+}
+
+uv_loop_t* uv_event_loop(t_dlnetsend* x) {
+    if (x->event_loop_ptr != NULL)
+        return x->event_loop_ptr;
+
+    if (uv_loop_init(&x->event_loop_struct))
+        return NULL;
+
+    x->event_loop_ptr = &x->event_loop_struct;
+    return x->event_loop_ptr;
 }
